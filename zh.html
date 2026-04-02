@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>功能分期分析工具</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+/* Password overlay */
+#pw-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:#0f1117;
+  display:flex;align-items:center;justify-content:center;
+}
+.pw-box{
+  background:#1e2130;border:1px solid #2d3148;border-radius:16px;
+  padding:40px 36px;width:100%;max-width:380px;text-align:center;
+}
+.pw-box h2{font-size:1.2rem;font-weight:700;margin-bottom:6px}
+.pw-box p{font-size:.82rem;color:#64748b;margin-bottom:24px}
+.pw-box input{
+  width:100%;background:#0a0c14;border:1px solid #3d4060;border-radius:8px;
+  padding:12px 14px;color:#e2e8f0;font-size:1rem;text-align:center;
+  letter-spacing:.12em;margin-bottom:14px;outline:none;
+}
+.pw-box input:focus{border-color:#60a5fa}
+.pw-box button{
+  width:100%;padding:12px;border-radius:8px;border:none;
+  background:#3b82f6;color:#fff;font-size:.95rem;font-weight:700;cursor:pointer;
+}
+.pw-box button:hover{background:#2563eb}
+.pw-err{color:#f87171;font-size:.8rem;margin-top:10px;min-height:18px}
+#app-root{display:none}
+/* Header */
+.hdr{background:#1e2130;border-bottom:1px solid #2d3148;padding:16px 24px}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.hdr h1{font-size:1.25rem;font-weight:700;line-height:1.3}
+.hdr h1 em{color:#60a5fa;font-style:normal}
+.hdr-cfg{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}
+.hdr-cfg label{font-size:0.75rem;color:#64748b;display:block;margin-bottom:3px}
+.hdr-cfg input{background:#0a0c14;border:1px solid #3d4060;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:0.85rem;width:180px}
+/* Tabs */
+.tabs{display:flex;gap:2px;background:#1e2130;border-bottom:1px solid #2d3148;padding:0 24px}
+.tb{padding:11px 18px;border:none;background:none;color:#64748b;font-size:0.85rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.tb:hover{color:#94a3b8}
+.tb.on{color:#60a5fa;border-bottom-color:#60a5fa}
+.content{padding:24px;max-width:1400px;margin:0 auto}
+/* Cards */
+.card{background:#1e2130;border:1px solid #2d3148;border-radius:12px;padding:20px;margin-bottom:20px}
+.card-ttl{font-size:0.95rem;font-weight:700;margin-bottom:16px;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+/* Tabs content */
+.pane{display:none}.pane.on{display:block}
+/* Pro/Con */
+.pc-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.pc-grid{grid-template-columns:1fr}}
+.pc-pro{background:#0d2f1a;border:1px solid #166534;border-radius:10px;padding:16px}
+.pc-con{background:#2a0a0a;border:1px solid #7f1d1d;border-radius:10px;padding:16px}
+.pc-pro h3{color:#4ade80;font-size:.88rem;margin-bottom:12px;font-weight:700}
+.pc-con h3{color:#f87171;font-size:.88rem;margin-bottom:12px;font-weight:700}
+.pci{display:flex;gap:8px;margin-bottom:10px;align-items:flex-start}
+.pci .ico{font-size:.85rem;flex-shrink:0;margin-top:1px}
+.pci .txt{font-size:.8rem;color:#cbd5e1;line-height:1.55}
+.pci .lbl{font-weight:700;color:#e2e8f0}
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{text-align:left;padding:9px 12px;background:#0a0c14;color:#64748b;font-weight:600;border-bottom:1px solid #2d3148}
+td{padding:9px 12px;border-bottom:1px solid #1a1d2e;color:#cbd5e1;line-height:1.45}
+tr:hover td{background:#1a1d2e}
+/* Model layout */
+.ml{display:grid;grid-template-columns:300px 1fr;gap:20px}
+@media(max-width:1050px){.ml{grid-template-columns:1fr}}
+/* Sliders */
+.sg{margin-bottom:12px}
+.sl-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+.sl-name{font-size:.78rem;color:#94a3b8}
+.sl-val{font-size:.82rem;font-weight:700;color:#60a5fa}
+input[type=range]{width:100%;height:4px;accent-color:#60a5fa;cursor:pointer}
+.sec-lbl{font-size:.7rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #2d3148}
+/* Result cards */
+.rc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+@media(max-width:900px){.rc-grid{grid-template-columns:repeat(2,1fr)}}
+.rc{background:#0a0c14;border:1px solid #2d3148;border-radius:10px;padding:14px;text-align:center}
+.rc .sname{font-size:.7rem;color:#64748b;margin-bottom:6px;font-weight:600}
+.rc .rval{font-size:1.6rem;font-weight:800;line-height:1}
+.rc .rlbl{font-size:.68rem;color:#64748b;margin-top:2px}
+.rc .rrev{font-size:.78rem;color:#94a3b8;margin-top:5px}
+.rc .rcost{font-size:.72rem;color:#475569;margin-top:2px}
+.rc.c0{border-color:#16a34a;background:#0d2f1a}.rc.c0 .rval{color:#4ade80}
+.rc.c1{border-color:#3b82f6;background:#0f1e35}.rc.c1 .rval{color:#60a5fa}
+.rc.c2{border-color:#8b5cf6;background:#1a1030}.rc.c2 .rval{color:#a78bfa}
+.rc.c3{border-color:#dc2626;background:#2a0a0a}.rc.c3 .rval{color:#f87171}
+/* Charts */
+.ch-wrap{position:relative;height:240px;margin-bottom:6px}
+/* Tags */
+.tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:.68rem;font-weight:700}
+.tag-k{background:#1e3a5f;color:#93c5fd}
+.tag-o{background:#1a2e1a;color:#86efac}
+.tag-a{background:#2a1a2a;color:#d8b4fe}
+/* Formula box */
+.fml{background:#0a0c14;border:1px solid #2d3148;border-radius:8px;padding:14px 16px;font-size:.82rem;color:#94a3b8;line-height:2.1}
+.fml strong{color:#60a5fa}
+/* Sticky panel */
+.sticky-panel{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow-y:auto}
+/* Opportunity loss banner */
+.opp-banner{background:#2a0a0a;border:1px solid #7f1d1d;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.opp-banner .opp-ttl{font-size:.78rem;color:#f87171;font-weight:700}
+.opp-banner .opp-val{font-size:1.4rem;font-weight:800;color:#f87171}
+.opp-banner .opp-sub{font-size:.73rem;color:#9f1239}
+/* Print */
+@media print{.hdr-cfg,.sticky-panel,input[type=range]{display:none}.ml{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- PASSWORD OVERLAY -->
+<div id="pw-overlay">
+  <div class="pw-box">
+    <h2>🔒 功能分期分析工具</h2>
+    <p>访问需要密码</p>
+    <input type="password" id="pw-input" placeholder="请输入密码"
+           onkeydown="if(event.key==='Enter')checkPw()">
+    <button onclick="checkPw()">登录</button>
+    <div class="pw-err" id="pw-err"></div>
+  </div>
+</div>
+
+<div id="app-root">
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-top">
+    <h1>功能分期分析工具 &mdash; <em id="featureName">现引现渡</em></h1>
+    <span style="font-size:.75rem;color:#475569">适用于其他产品/功能 | 全场景自动计算</span>
+  </div>
+  <div class="hdr-cfg">
+    <div><label>公司名称</label><input id="companyInput" value="moomoo证券" oninput="updateName()"></div>
+    <div><label>分析功能名称</label><input id="featureInput" value="现引现渡" oninput="updateName()"></div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tb on" onclick="switchTab(0)">📋 优劣分析</button>
+  <button class="tb" onclick="switchTab(1)">💰 ROI模型</button>
+  <button class="tb" onclick="switchTab(2)">📖 变量参考</button>
+</div>
+
+<div class="content">
+
+<!-- ══════════════════ TAB 0: PRO/CON ══════════════════ -->
+<div class="pane on" id="pane0">
+
+  <div class="card">
+    <div class="card-ttl">🏦 <span id="pcTitle">不实现现引现渡时的优缺点（moomoo证券）</span></div>
+    <div class="pc-grid">
+      <div class="pc-pro">
+        <h3>✅ 优点（不实现时）</h3>
+        <div id="prosList"></div>
+      </div>
+      <div class="pc-con">
+        <h3>⚠️ 缺点（不实现时）</h3>
+        <div id="consList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">🗓 分期开发路线图</div>
+    <div style="overflow-x:auto" id="phaseTable"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">🏆 与主要竞争对手的功能比较</div>
+    <div style="overflow-x:auto" id="compTable"></div>
+    <p style="font-size:.73rem;color:#475569;margin-top:10px">※ 基于公开信息的估算。实际条件请参考各公司公告信息。</p>
+  </div>
+
+</div><!-- /pane0 -->
+
+<!-- ══════════════════ TAB 1: ROI MODEL ══════════════════ -->
+<div class="pane" id="pane1">
+  <div class="ml">
+
+    <!-- LEFT: Parameters -->
+    <div class="sticky-panel">
+      <div class="card">
+        <div class="card-ttl">⚙️ 参数设置</div>
+
+        <div class="sec-lbl">👥 市场·用户</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">初期活跃账户数</span><span class="sl-val"><span id="v-users">10,000</span>人</span></div>
+          <input type="range" id="s-users" min="1000" max="100000" step="1000" value="10000" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">年增长率（功能全面实现时）</span><span class="sl-val"><span id="v-growth">30</span>%</span></div>
+          <input type="range" id="s-growth" min="5" max="120" step="5" value="30" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">无功能期间的增长惩罚</span><span class="sl-val"><span id="v-penalty">75</span>%</span></div>
+          <input type="range" id="s-penalty" min="30" max="100" step="5" value="75" oninput="update()">
+          <div style="font-size:.68rem;color:#475569;margin-top:2px">100%=无惩罚，50%=增长减半</div>
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">年均基础流失率</span><span class="sl-val"><span id="v-churn">10</span>%</span></div>
+          <input type="range" id="s-churn" min="0" max="40" step="1" value="10" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">无功能时的额外流失率</span><span class="sl-val">+<span id="v-addchurn">3</span>%</span></div>
+          <input type="range" id="s-addchurn" min="0" max="15" step="1" value="3" oninput="update()">
+        </div>
+
+        <div class="sec-lbl">💴 收益·利率</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">人均持仓余额</span><span class="sl-val"><span id="v-balance">100</span>万日元</span></div>
+          <input type="range" id="s-balance" min="10" max="500" step="10" value="100" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">买方持仓比例</span><span class="sl-val"><span id="v-buyratio">70</span>%</span></div>
+          <input type="range" id="s-buyratio" min="30" max="90" step="5" value="70" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">买方利率（面向客户）</span><span class="sl-val"><span id="v-buyrate">2.80</span>%</span></div>
+          <input type="range" id="s-buyrate" min="1.0" max="5.0" step="0.1" value="2.8" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">融资成本</span><span class="sl-val"><span id="v-fundcost">1.60</span>%</span></div>
+          <input type="range" id="s-fundcost" min="0.5" max="3.5" step="0.1" value="1.6" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">股票借贷费（面向客户）</span><span class="sl-val"><span id="v-lendrate">1.10</span>%</span></div>
+          <input type="range" id="s-lendrate" min="0.3" max="3.0" step="0.1" value="1.1" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">融资借贷成本</span><span class="sl-val"><span id="v-lendcost">0.40</span>%</span></div>
+          <input type="range" id="s-lendcost" min="0.1" max="1.5" step="0.1" value="0.4" oninput="update()">
+        </div>
+
+        <div class="sec-lbl">🏗 开发成本</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">第一阶段开发费</span><span class="sl-val"><span id="v-p1cost">9,500</span>万日元</span></div>
+          <input type="range" id="s-p1cost" min="1000" max="30000" step="500" value="9500" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">功能附加（第二阶段）开发费</span><span class="sl-val"><span id="v-p2cost">5,500</span>万日元</span></div>
+          <input type="range" id="s-p2cost" min="500" max="20000" step="500" value="5500" oninput="update()">
+        </div>
+
+        <div class="sec-lbl">📅 分析设置</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">评估期间</span><span class="sl-val"><span id="v-months">36</span>个月</span></div>
+          <input type="range" id="s-months" min="12" max="60" step="6" value="36" oninput="update()">
+        </div>
+      </div><!-- /card -->
+    </div><!-- /sticky-panel -->
+
+    <!-- RIGHT: Results -->
+    <div>
+
+      <!-- Opportunity loss banner -->
+      <div class="opp-banner" id="oppBanner">
+        <div>
+          <div class="opp-ttl">⚠️ 立即实现 vs 12个月延迟的机会损失</div>
+          <div class="opp-val" id="oppVal">—</div>
+        </div>
+        <div>
+          <div class="opp-ttl">ROI差</div>
+          <div class="opp-val" id="oppRoi">—</div>
+        </div>
+        <div style="font-size:.75rem;color:#9f1239;flex:1">
+          将第二阶段推迟12个月，评估期间内的累积毛利将减少这些。延迟越长，高增长场景下的损失呈指数级扩大。
+        </div>
+      </div>
+
+      <!-- ROI cards -->
+      <div class="rc-grid" id="roiCards"></div>
+
+      <!-- Cumulative GP chart -->
+      <div class="card">
+        <div class="card-ttl">📈 累积毛利（贡献利润）趋势</div>
+        <div class="ch-wrap"><canvas id="chartGP"></canvas></div>
+        <div style="font-size:.72rem;color:#475569">毛利 = 客户利息收入 + 借贷费收入 − 融资成本</div>
+      </div>
+
+      <!-- User growth chart -->
+      <div class="card">
+        <div class="card-ttl">👥 用户数趋势</div>
+        <div class="ch-wrap"><canvas id="chartUsers"></canvas></div>
+      </div>
+
+      <!-- Delay sensitivity -->
+      <div class="card">
+        <div class="card-ttl">🔍 第二阶段启动时机 × ROI 敏感性分析</div>
+        <div class="ch-wrap"><canvas id="chartDelay"></canvas></div>
+        <div style="font-size:.72rem;color:#475569">横轴：到第二阶段（功能附加）开始为止的延迟期间（月）</div>
+      </div>
+
+      <!-- Annual summary table -->
+      <div class="card">
+        <div class="card-ttl">📊 年度汇总表</div>
+        <div style="overflow-x:auto" id="summaryTable"></div>
+      </div>
+
+    </div><!-- /right -->
+  </div><!-- /ml -->
+</div><!-- /pane1 -->
+
+<!-- ══════════════════ TAB 2: VARIABLE REFERENCE ══════════════════ -->
+<div class="pane" id="pane2">
+
+  <div class="card">
+    <div class="card-ttl">📖 模型变量参考</div>
+    <p style="font-size:.8rem;color:#64748b;margin-bottom:14px">
+      <span class="tag tag-k">主要</span> = 对ROI影响较大的变量。请首先将其调整为实际数字。
+      <span class="tag tag-o" style="margin-left:8px">可选</span> = 需要提高精度时设置。
+      <span class="tag tag-a" style="margin-left:8px">敏感性</span> = 用于场景比较的设计变量。
+    </p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:140px">变量名</th>
+            <th>类型</th>
+            <th style="min-width:200px">含义（简单说明）</th>
+            <th style="min-width:160px">推荐值·范围</th>
+            <th>依据·来源</th>
+          </tr>
+        </thead>
+        <tbody id="varTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">🧮 计算公式</div>
+    <div class="fml">
+      <strong>月度毛利/人（万日元）</strong><br>
+      　= 持仓余额 × 买方持仓比例 × (买方利率 − 融资利率) ÷ 12<br>
+      　+ 持仓余额 × (1 − 买方持仓比例) × (借贷费 − 融资借贷成本) ÷ 12<br>
+      　+ 其他手续费 ÷ 12 ÷ 10,000<br>
+      <br>
+      <strong>月度用户数（有功能）</strong><br>
+      　= 上月用户数 × (1 + 月增长率) × (1 − 月流失率)<br>
+      <br>
+      <strong>月度用户数（无功能）</strong><br>
+      　= 上月用户数 × (1 + 月增长率 × 惩罚系数) × (1 − 月流失率 − 额外流失率)<br>
+      <br>
+      <strong>累积毛利</strong> = Σ（月度用户数 × 月度毛利/人）<br>
+      <br>
+      <strong>ROI</strong> = (累积毛利 − 总开发费) ÷ 总开发费 × 100%<br>
+      <br>
+      <strong>机会损失（延迟成本）</strong> = 立即实现的累积毛利 − 延迟实现的累积毛利
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">📌 适用于其他产品/功能的指南</div>
+    <table>
+      <thead><tr><th>产品/功能示例</th><th>功能名称</th><th>主要调整参数</th></tr></thead>
+      <tbody>
+        <tr><td>现引现渡（本例）</td><td>现引现渡</td><td>使用默认值</td></tr>
+        <tr><td>一般信用交易（无期限）</td><td>一般信用·无期限</td><td>增长率↑、惩罚系数0.70、买方利率3.5%</td></tr>
+        <tr><td>IPO申购功能</td><td>IPO申购</td><td>初期用户数↑、将人均持仓余额改为抽签单价</td></tr>
+        <tr><td>期货·期权</td><td>衍生品</td><td>增长率较低、惩罚系数0.60、开发费↑↑</td></tr>
+        <tr><td>外国股票信用交易</td><td>外国股票信用</td><td>借贷费↑、融资成本↑、增长率↑</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /pane2 -->
+
+</div><!-- /content -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════
+
+const PROS = [
+  { lbl:"缩短开发周期",        txt:"仅专注于反向平仓，可将初期发布提前2~3个月。最大化市场进入速度。" },
+  { lbl:"消除系统复杂性",      txt:"无需现货↔信用转换、股数锁定、账户类型限制（NISA等）等后台要求，大幅削减QA成本。" },
+  { lbl:"降低操作风险",        txt:"减少误操作和异常处理模式，易于限制故障时的影响范围。同时提升监管上的可管理性。" },
+  { lbl:"降低初期开发成本",    txt:"可将相当于第二阶段的开发费用（约5,500万日元）推迟，实现较低初期投入启动。" },
+  { lbl:"与全球平台的兼容性",  txt:"与美股保持相同的反向平仓模型，可直接享受全球更新的成果。" },
+  { lbl:"减轻合规负担",        txt:"减少交割日管理、权利处理、特殊说明义务，保持金融厅合规和条款设计的简洁性。" },
+];
+
+const CONS = [
+  { lbl:"完全流失股东优待用户",      txt:"无法使用优待套利交易（现渡交割），以优待为目的的大量投资者群体将固定流向竞争对手。3月和9月尤为明显。" },
+  { lbl:"与竞争对手的明显功能差距",  txt:"SBI、乐天、松井等主要网络券商均免费标配现引现渡。存在被认为是"功能不足的券商"的风险。" },
+  { lbl:"中长期利息收入损失",        txt:"若无法现引，投资者无法维持长期信用头寸，持仓余额缩小，利差收入减少。" },
+  { lbl:"引发流失（6个月规则）",     txt:"制度信用6个月还款期限到期时，"强制平仓→出金"被迫发生。每半年重复一次流失事件。" },
+  { lbl:"资金效率恶化",              txt:"无法使用现引→代用有价证券循环，投资者杠杆效率下降，成为持仓余额扩大的阻碍因素。" },
+  { lbl:"增加客户咨询和投诉处理成本", txt:"针对"制度上说明的功能无法使用"的咨询和投诉处理成本将持续产生。" },
+];
+
+const PHASES = [
+  { ph:"第一阶段",        period:"4~6个月",  feat:"信用账户/审核、保证金管理、持仓管理、反向平仓还款、追加保证金·强制平仓、基本UI·通知", ih:"35人月", out:"15人月", cost:"9,500万日元" },
+  { ph:"第二阶段",        period:"+3~4个月", feat:"一般信用·还款期限变体、权利处理·股息调整自动化、审计日志强化", ih:"20人月", out:"10人月", cost:"5,800万日元" },
+  { ph:"第三阶段（现引现渡）", period:"+2~3个月", feat:"现引/现渡订单、现货↔信用转换、资金/股数锁定、账户类型限制（NISA等）、异常处理·客服UI", ih:"15人月", out:"12人月", cost:"5,520万日元" },
+];
+
+const COMP = [
+  { item:"现引·现渡",          sbi:"✅ 免费",  raku:"✅ 免费",  mat:"✅ 免费",  moo:"❌ 未实现" },
+  { item:"买方利率（制度信用）", sbi:"2.80%",   raku:"2.80%",   mat:"3.10%",   moo:"检讨中" },
+  { item:"还款期限",            sbi:"6个月/无期限", raku:"6个月/无期限", mat:"6个月/无期限", moo:"仅反向平仓" },
+  { item:"股东优待套利",        sbi:"✅",        raku:"✅",        mat:"✅",        moo:"❌" },
+  { item:"代用有价证券",        sbi:"✅",        raku:"✅",        mat:"✅",        moo:"预计对应" },
+];
+
+const VARS = [
+  { nm:"初期活跃账户数",      tp:"k", desc:"Phase 1发布时的信用交易活跃用户数", rng:"5,000〜30,000人", basis:"根据内部账户数和信用申请率预测" },
+  { nm:"年增长率",            tp:"k", desc:"每年用户增长百分比（功能全面实现时的预期）", rng:"15%（低）/ 30%（中）/ 50%（高）", basis:"参考市场增长率和现有产品实绩设定" },
+  { nm:"增长惩罚",            tp:"k", desc:"无功能期间的增长率下降率。75%=仅以通常75%的速度增长", rng:"60〜90%", basis:"根据客户调查·竞争对手流失率估算" },
+  { nm:"年均基础流失率",      tp:"k", desc:"正常情况下的年均流失率（行业平均约10%）", rng:"8〜15%", basis:"本公司现有产品的流失率实绩" },
+  { nm:"无功能时的额外流失率", tp:"k", desc:"因功能未实现而额外增加的流失率", rng:"1〜5%", basis:"根据客户调查·竞争对手转移率估算" },
+  { nm:"人均持仓余额",        tp:"k", desc:"活跃账户每人的平均信用持仓金额（万日元）", rng:"50〜200万日元", basis:"行业平均·本公司用户细分分析" },
+  { nm:"买方持仓比例",        tp:"k", desc:"全部持仓中买方持仓的占比（其余为卖方）", rng:"60〜75%", basis:"行业平均（买方占优为一般情况）" },
+  { nm:"买方利率（面向客户）", tp:"k", desc:"向客户收取的买入持仓利率（年率）= 券商主要收益来源", rng:"2.50〜3.10%", basis:"SBI·乐天等公告值2.80%为行业基准" },
+  { nm:"融资成本",            tp:"k", desc:"从证券金融公司（日证金等）融资的成本（年率）", rng:"1.40〜2.00%", basis:"日证金公告值1.60%为基准" },
+  { nm:"股票借贷费（面向客户）", tp:"o", desc:"向卖出持仓客户收取的借贷费（年率）", rng:"0.80〜1.50%", basis:"各公司公告值1.10%为基准" },
+  { nm:"融资借贷成本",        tp:"o", desc:"向证券金融公司支付的借贷费（年率）", rng:"0.30〜0.60%", basis:"日证金公告值0.40%为基准" },
+  { nm:"第一阶段开发费",      tp:"k", desc:"基本信用交易功能的开发成本合计（万日元）", rng:"5,000〜15,000万日元", basis:"内制35人月+外包15人月为参考。根据内部单价调整" },
+  { nm:"第二阶段开发费",      tp:"k", desc:"附加功能（现引现渡等）的开发成本（万日元）", rng:"3,000〜10,000万日元", basis:"内制15人月+外包12人月为参考" },
+  { nm:"评估期间",            tp:"o", desc:"ROI计算使用的分析期间（月）", rng:"24〜60个月", basis:"投资回收期3〜5年为一般标准" },
+  { nm:"第二阶段启动时机",    tp:"a", desc:"从Phase 1发布到Phase 2发布的期间（用于敏感性分析）", rng:"0〜24个月", basis:"在本工具的敏感性分析图表中确认最优点" },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// SCENARIO DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+const SCENARIOS = [
+  { label:"立即实现（0个月）", delay:0,  color:"#4ade80", cls:"c0" },
+  { label:"3个月后",           delay:3,  color:"#60a5fa", cls:"c1" },
+  { label:"6个月后",           delay:6,  color:"#a78bfa", cls:"c2" },
+  { label:"12个月后",          delay:12, color:"#f87171", cls:"c3" },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ═══════════════════════════════════════════════════════════════
+function simulate(p, phase2Month) {
+  const startMonth = phase2Month <= 0 ? 1 : phase2Month;
+
+  const mg  = Math.pow(1 + p.growth/100,               1/12) - 1;
+  const pgm = Math.pow(1 + p.growth*p.penalty/100/100, 1/12) - 1;
+  const mc  = Math.pow(1 + p.churn/100,                1/12) - 1;
+  const mac = Math.pow(1 + (p.churn + p.addChurn)/100, 1/12) - 1;
+
+  const gpPerUser = p.balance * (p.buyRatio/100) * (p.buyRate - p.fundCost) / 100 / 12
+                  + p.balance * (1 - p.buyRatio/100) * (p.lendRate - p.lendCost) / 100 / 12
+                  + 500 / 12 / 10000;
+
+  let users  = p.users;
+  let cumGP  = 0;
+  const uArr = [];
+  const gpArr = [];
+  const cumArr = [];
+
+  for (let m = 1; m <= p.months; m++) {
+    const limited = m < startMonth;
+    users = users * (1 + (limited ? pgm : mg)) * (1 - (limited ? mac : mc));
+    const gp = users * gpPerUser;
+    cumGP += gp;
+    uArr.push(Math.round(users));
+    gpArr.push(gp);
+    cumArr.push(cumGP);
+  }
+
+  const devCost = p.p1cost + (startMonth <= p.months ? p.p2cost : 0);
+  const roi = (cumGP - devCost) / devCost;
+
+  return { uArr, gpArr, cumArr, totalGP: cumGP, roi, devCost };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════════
+let charts = {};
+
+function mkChart(id, type, data, opts) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), { type, data, options: opts });
+}
+
+const baseOpts = (yFmt, yTitle) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 200 },
+  plugins: {
+    legend: { labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 14, padding: 10 } },
+    tooltip: { backgroundColor: '#1e2130', titleColor: '#e2e8f0', bodyColor: '#94a3b8', borderColor: '#2d3148', borderWidth: 1 }
+  },
+  scales: {
+    x: { ticks: { color:'#475569', font:{size:10} }, grid: { color:'#1e2130' } },
+    y: {
+      ticks: { color:'#475569', font:{size:10}, callback: yFmt },
+      grid: { color:'#1e2130' },
+      title: yTitle ? { display:true, text:yTitle, color:'#64748b', font:{size:10} } : undefined
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PARAMS READER
+// ═══════════════════════════════════════════════════════════════
+function getP() {
+  return {
+    users:    +document.getElementById('s-users').value,
+    growth:   +document.getElementById('s-growth').value,
+    penalty:  +document.getElementById('s-penalty').value,
+    churn:    +document.getElementById('s-churn').value,
+    addChurn: +document.getElementById('s-addchurn').value,
+    balance:  +document.getElementById('s-balance').value,
+    buyRatio: +document.getElementById('s-buyratio').value,
+    buyRate:  +document.getElementById('s-buyrate').value,
+    fundCost: +document.getElementById('s-fundcost').value,
+    lendRate: +document.getElementById('s-lendrate').value,
+    lendCost: +document.getElementById('s-lendcost').value,
+    p1cost:   +document.getElementById('s-p1cost').value,
+    p2cost:   +document.getElementById('s-p2cost').value,
+    months:   +document.getElementById('s-months').value,
+  };
+}
+
+function fmt(n) { return Math.round(n).toLocaleString(); }
+function fmtM(n) { return fmt(n)+'万'; }
+
+// ═══════════════════════════════════════════════════════════════
+// UPDATE
+// ═══════════════════════════════════════════════════════════════
+function update() {
+  const p = getP();
+
+  document.getElementById('v-users').textContent    = p.users.toLocaleString();
+  document.getElementById('v-growth').textContent   = p.growth;
+  document.getElementById('v-penalty').textContent  = p.penalty;
+  document.getElementById('v-churn').textContent    = p.churn;
+  document.getElementById('v-addchurn').textContent = p.addChurn;
+  document.getElementById('v-balance').textContent  = p.balance;
+  document.getElementById('v-buyratio').textContent = p.buyRatio;
+  document.getElementById('v-buyrate').textContent  = p.buyRate.toFixed(2);
+  document.getElementById('v-fundcost').textContent = p.fundCost.toFixed(2);
+  document.getElementById('v-lendrate').textContent = p.lendRate.toFixed(2);
+  document.getElementById('v-lendcost').textContent = p.lendCost.toFixed(2);
+  document.getElementById('v-p1cost').textContent   = p.p1cost.toLocaleString();
+  document.getElementById('v-p2cost').textContent   = p.p2cost.toLocaleString();
+  document.getElementById('v-months').textContent   = p.months;
+
+  const results = SCENARIOS.map(s => ({ ...s, ...simulate(p, s.delay) }));
+
+  const best  = results[0];
+  const worst = results[results.length - 1];
+  document.getElementById('oppVal').textContent = '-' + fmtM(best.totalGP - worst.totalGP) + '日元';
+  document.getElementById('oppRoi').textContent = '-' + ((best.roi - worst.roi)*100).toFixed(1) + 'pt';
+
+  document.getElementById('roiCards').innerHTML = results.map(r => `
+    <div class="rc ${r.cls}">
+      <div class="sname">${r.label}</div>
+      <div class="rval">${(r.roi*100).toFixed(0)}%</div>
+      <div class="rlbl">ROI</div>
+      <div class="rrev">累积毛利 ${fmtM(r.totalGP)}日元</div>
+      <div class="rcost">开发费 ${fmtM(r.devCost)}日元</div>
+    </div>
+  `).join('');
+
+  const months = Array.from({length: p.months}, (_, i) => i+1);
+  const mLabels = months.map(m => m % 6 === 0 ? m+'M' : '');
+
+  mkChart('chartGP', 'line', {
+    labels: mLabels,
+    datasets: results.map(r => ({
+      label: r.label,
+      data: r.cumArr,
+      borderColor: r.color,
+      backgroundColor: r.color + '18',
+      fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2
+    }))
+  }, baseOpts(v => fmtM(v)+'日元', '累积毛利（万日元）'));
+
+  mkChart('chartUsers', 'line', {
+    labels: mLabels,
+    datasets: results.map(r => ({
+      label: r.label,
+      data: r.uArr,
+      borderColor: r.color,
+      fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2
+    }))
+  }, baseOpts(v => fmt(v)+'人', '用户数（人）'));
+
+  const delayRange = [];
+  for (let d = 0; d <= Math.min(p.months, 24); d++) delayRange.push(d);
+  const roiByDelay = delayRange.map(d => {
+    const r = simulate(p, d);
+    return +(r.roi * 100).toFixed(2);
+  });
+
+  mkChart('chartDelay', 'line', {
+    labels: delayRange.map(d => d + 'M'),
+    datasets: [{
+      label: 'ROI (%)',
+      data: roiByDelay,
+      borderColor: '#60a5fa',
+      backgroundColor: '#60a5fa22',
+      fill: true, tension: 0.4,
+      pointRadius: 3, pointBackgroundColor: '#60a5fa',
+      borderWidth: 2,
+    }]
+  }, {
+    ...baseOpts(v => v + '%', 'ROI (%)'),
+    plugins: { ...baseOpts().plugins, legend: { display: false } }
+  });
+
+  const years = [];
+  for (let y = 1; y*12 <= p.months; y++) years.push(y);
+
+  let tbl = `<table>
+    <thead><tr>
+      <th>年度</th>
+      ${results.map(r => `<th>${r.label}</th>`).join('')}
+      <th style="color:#f87171">机会损失（与立即实现相比）</th>
+    </tr></thead><tbody>`;
+
+  years.forEach(y => {
+    const mi = y*12 - 1;
+    tbl += `<tr>
+      <td><strong>第${y}年末</strong></td>
+      ${results.map(r => `<td>
+        累积毛利 <strong>${fmtM(r.cumArr[mi])}日元</strong><br>
+        <span style="font-size:.72rem;color:#64748b">ROI ${(((r.cumArr[mi]-r.devCost)/r.devCost)*100).toFixed(0)}%</span>
+      </td>`).join('')}
+      <td style="color:#f87171;font-size:.78rem">${y===years[years.length-1] ?
+        '-' + fmtM(results[0].cumArr[mi] - results[results.length-1].cumArr[mi]) + '日元' : '—'}
+      </td>
+    </tr>`;
+  });
+
+  tbl += `</tbody></table>`;
+  document.getElementById('summaryTable').innerHTML = tbl;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER STATIC CONTENT
+// ═══════════════════════════════════════════════════════════════
+function renderStatic() {
+  document.getElementById('prosList').innerHTML = PROS.map(p =>
+    `<div class="pci"><span class="ico">✅</span><div class="txt"><span class="lbl">${p.lbl}：</span>${p.txt}</div></div>`
+  ).join('');
+  document.getElementById('consList').innerHTML = CONS.map(c =>
+    `<div class="pci"><span class="ico">⚠️</span><div class="txt"><span class="lbl">${c.lbl}：</span>${c.txt}</div></div>`
+  ).join('');
+
+  document.getElementById('phaseTable').innerHTML = `
+    <table>
+      <thead><tr><th>阶段</th><th>期间参考</th><th>主要功能</th><th>内部工时</th><th>外包工时</th><th>成本估算</th></tr></thead>
+      <tbody>${PHASES.map(ph => `
+        <tr>
+          <td><strong>${ph.ph}</strong></td>
+          <td style="white-space:nowrap">${ph.period}</td>
+          <td style="font-size:.75rem">${ph.feat}</td>
+          <td style="white-space:nowrap">${ph.ih}</td>
+          <td style="white-space:nowrap">${ph.out}</td>
+          <td><strong>${ph.cost}</strong></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  document.getElementById('compTable').innerHTML = `
+    <table>
+      <thead><tr><th>功能</th><th>SBI证券</th><th>乐天证券</th><th>松井证券</th><th style="color:#60a5fa">moomoo证券</th></tr></thead>
+      <tbody>${COMP.map(r => `
+        <tr>
+          <td><strong>${r.item}</strong></td>
+          <td>${r.sbi}</td>
+          <td>${r.raku}</td>
+          <td>${r.mat}</td>
+          <td style="color:${r.moo.includes('❌')?'#f87171':r.moo.includes('✅')?'#4ade80':'#94a3b8'}">${r.moo}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  const tpMap = { k:['主要','tag-k'], o:['可选','tag-o'], a:['敏感性','tag-a'] };
+  document.getElementById('varTableBody').innerHTML = VARS.map(v => {
+    const [tpLbl, tpCls] = tpMap[v.tp];
+    return `<tr>
+      <td><strong>${v.nm}</strong></td>
+      <td><span class="tag ${tpCls}">${tpLbl}</span></td>
+      <td>${v.desc}</td>
+      <td style="font-family:Consolas,monospace;font-size:.75rem">${v.rng}</td>
+      <td style="font-size:.75rem;color:#64748b">${v.basis}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════
+function switchTab(idx) {
+  document.querySelectorAll('.pane').forEach((el, i) => el.classList.toggle('on', i===idx));
+  document.querySelectorAll('.tb').forEach((el, i) => el.classList.toggle('on', i===idx));
+  if (idx === 1) setTimeout(update, 50);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PRODUCT NAME
+// ═══════════════════════════════════════════════════════════════
+function updateName() {
+  const feat = document.getElementById('featureInput').value || '功能X';
+  const comp = document.getElementById('companyInput').value || '公司名称';
+  document.getElementById('featureName').textContent = feat;
+  document.getElementById('pcTitle').textContent = `${feat} 不实现时的优缺点（${comp}）`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+renderStatic();
+
+// ═══════════════════════════════════════════════════════════════
+// PASSWORD PROTECTION
+// ═══════════════════════════════════════════════════════════════
+const PW_HASH = '6d8d7914f56ee5ee99c5b617c5dfd4c597d93c06af0e090a6a0b4f77b606b597';
+const SESSION_KEY = 'fpa_auth';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function checkPw() {
+  const val = document.getElementById('pw-input').value;
+  const hash = await sha256(val);
+  if (hash === PW_HASH) {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    document.getElementById('pw-overlay').style.display = 'none';
+    document.getElementById('app-root').style.display = 'block';
+  } else {
+    document.getElementById('pw-err').textContent = '密码错误';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+if (sessionStorage.getItem(SESSION_KEY) === '1') {
+  document.getElementById('pw-overlay').style.display = 'none';
+  document.getElementById('app-root').style.display = 'block';
+}
+document.getElementById('pw-input').focus();
+</script>
+</div><!-- /app-root -->
+</body>
+</html>
