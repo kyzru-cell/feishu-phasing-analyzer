@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>機能フェーズ分析ツール</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+/* Password overlay */
+#pw-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:#0f1117;
+  display:flex;align-items:center;justify-content:center;
+}
+.pw-box{
+  background:#1e2130;border:1px solid #2d3148;border-radius:16px;
+  padding:40px 36px;width:100%;max-width:380px;text-align:center;
+}
+.pw-box h2{font-size:1.2rem;font-weight:700;margin-bottom:6px}
+.pw-box p{font-size:.82rem;color:#64748b;margin-bottom:24px}
+.pw-box input{
+  width:100%;background:#0a0c14;border:1px solid #3d4060;border-radius:8px;
+  padding:12px 14px;color:#e2e8f0;font-size:1rem;text-align:center;
+  letter-spacing:.12em;margin-bottom:14px;outline:none;
+}
+.pw-box input:focus{border-color:#60a5fa}
+.pw-box button{
+  width:100%;padding:12px;border-radius:8px;border:none;
+  background:#3b82f6;color:#fff;font-size:.95rem;font-weight:700;cursor:pointer;
+}
+.pw-box button:hover{background:#2563eb}
+.pw-err{color:#f87171;font-size:.8rem;margin-top:10px;min-height:18px}
+#app-root{display:none}
+/* Header */
+.hdr{background:#1e2130;border-bottom:1px solid #2d3148;padding:16px 24px}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.hdr h1{font-size:1.25rem;font-weight:700;line-height:1.3}
+.hdr h1 em{color:#60a5fa;font-style:normal}
+.hdr-cfg{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}
+.hdr-cfg label{font-size:0.75rem;color:#64748b;display:block;margin-bottom:3px}
+.hdr-cfg input{background:#0a0c14;border:1px solid #3d4060;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:0.85rem;width:180px}
+/* Tabs */
+.tabs{display:flex;gap:2px;background:#1e2130;border-bottom:1px solid #2d3148;padding:0 24px}
+.tb{padding:11px 18px;border:none;background:none;color:#64748b;font-size:0.85rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.tb:hover{color:#94a3b8}
+.tb.on{color:#60a5fa;border-bottom-color:#60a5fa}
+.content{padding:24px;max-width:1400px;margin:0 auto}
+/* Cards */
+.card{background:#1e2130;border:1px solid #2d3148;border-radius:12px;padding:20px;margin-bottom:20px}
+.card-ttl{font-size:0.95rem;font-weight:700;margin-bottom:16px;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+/* Tabs content */
+.pane{display:none}.pane.on{display:block}
+/* Pro/Con */
+.pc-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.pc-grid{grid-template-columns:1fr}}
+.pc-pro{background:#0d2f1a;border:1px solid #166534;border-radius:10px;padding:16px}
+.pc-con{background:#2a0a0a;border:1px solid #7f1d1d;border-radius:10px;padding:16px}
+.pc-pro h3{color:#4ade80;font-size:.88rem;margin-bottom:12px;font-weight:700}
+.pc-con h3{color:#f87171;font-size:.88rem;margin-bottom:12px;font-weight:700}
+.pci{display:flex;gap:8px;margin-bottom:10px;align-items:flex-start}
+.pci .ico{font-size:.85rem;flex-shrink:0;margin-top:1px}
+.pci .txt{font-size:.8rem;color:#cbd5e1;line-height:1.55}
+.pci .lbl{font-weight:700;color:#e2e8f0}
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{text-align:left;padding:9px 12px;background:#0a0c14;color:#64748b;font-weight:600;border-bottom:1px solid #2d3148}
+td{padding:9px 12px;border-bottom:1px solid #1a1d2e;color:#cbd5e1;line-height:1.45}
+tr:hover td{background:#1a1d2e}
+/* Model layout */
+.ml{display:grid;grid-template-columns:300px 1fr;gap:20px}
+@media(max-width:1050px){.ml{grid-template-columns:1fr}}
+/* Sliders */
+.sg{margin-bottom:12px}
+.sl-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+.sl-name{font-size:.78rem;color:#94a3b8}
+.sl-val{font-size:.82rem;font-weight:700;color:#60a5fa}
+input[type=range]{width:100%;height:4px;accent-color:#60a5fa;cursor:pointer}
+.sec-lbl{font-size:.7rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #2d3148}
+/* Result cards */
+.rc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+@media(max-width:900px){.rc-grid{grid-template-columns:repeat(2,1fr)}}
+.rc{background:#0a0c14;border:1px solid #2d3148;border-radius:10px;padding:14px;text-align:center}
+.rc .sname{font-size:.7rem;color:#64748b;margin-bottom:6px;font-weight:600}
+.rc .rval{font-size:1.6rem;font-weight:800;line-height:1}
+.rc .rlbl{font-size:.68rem;color:#64748b;margin-top:2px}
+.rc .rrev{font-size:.78rem;color:#94a3b8;margin-top:5px}
+.rc .rcost{font-size:.72rem;color:#475569;margin-top:2px}
+.rc.c0{border-color:#16a34a;background:#0d2f1a}.rc.c0 .rval{color:#4ade80}
+.rc.c1{border-color:#3b82f6;background:#0f1e35}.rc.c1 .rval{color:#60a5fa}
+.rc.c2{border-color:#8b5cf6;background:#1a1030}.rc.c2 .rval{color:#a78bfa}
+.rc.c3{border-color:#dc2626;background:#2a0a0a}.rc.c3 .rval{color:#f87171}
+/* Charts */
+.ch-wrap{position:relative;height:240px;margin-bottom:6px}
+/* Tags */
+.tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:.68rem;font-weight:700}
+.tag-k{background:#1e3a5f;color:#93c5fd}
+.tag-o{background:#1a2e1a;color:#86efac}
+.tag-a{background:#2a1a2a;color:#d8b4fe}
+/* Formula box */
+.fml{background:#0a0c14;border:1px solid #2d3148;border-radius:8px;padding:14px 16px;font-size:.82rem;color:#94a3b8;line-height:2.1}
+.fml strong{color:#60a5fa}
+/* Sticky panel */
+.sticky-panel{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow-y:auto}
+/* Opportunity loss banner */
+.opp-banner{background:#2a0a0a;border:1px solid #7f1d1d;border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.opp-banner .opp-ttl{font-size:.78rem;color:#f87171;font-weight:700}
+.opp-banner .opp-val{font-size:1.4rem;font-weight:800;color:#f87171}
+.opp-banner .opp-sub{font-size:.73rem;color:#9f1239}
+/* Print */
+@media print{.hdr-cfg,.sticky-panel,input[type=range]{display:none}.ml{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- PASSWORD OVERLAY -->
+<div id="pw-overlay">
+  <div class="pw-box">
+    <h2>🔒 機能フェーズ分析ツール</h2>
+    <p>アクセスにはパスワードが必要です</p>
+    <input type="password" id="pw-input" placeholder="パスワードを入力"
+           onkeydown="if(event.key==='Enter')checkPw()">
+    <button onclick="checkPw()">ログイン</button>
+    <div class="pw-err" id="pw-err"></div>
+  </div>
+</div>
+
+<div id="app-root">
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-top">
+    <h1>機能フェージング分析ツール &mdash; <em id="featureName">現引現渡し</em></h1>
+    <span style="font-size:.75rem;color:#475569">他の商品・機能にも対応 | 全シナリオ自動計算</span>
+  </div>
+  <div class="hdr-cfg">
+    <div><label>会社名</label><input id="companyInput" value="moomoo証券" oninput="updateName()"></div>
+    <div><label>分析対象 機能名</label><input id="featureInput" value="現引現渡し" oninput="updateName()"></div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tb on" onclick="switchTab(0)">📋 プロコン分析</button>
+  <button class="tb" onclick="switchTab(1)">💰 ROIモデル</button>
+  <button class="tb" onclick="switchTab(2)">📖 変数リファレンス</button>
+</div>
+
+<div class="content">
+
+<!-- ══════════════════ TAB 0: PRO/CON ══════════════════ -->
+<div class="pane on" id="pane0">
+
+  <div class="card">
+    <div class="card-ttl">🏦 <span id="pcTitle">現引現渡しを実装しない場合のメリット・デメリット（moomoo証券）</span></div>
+    <div class="pc-grid">
+      <div class="pc-pro">
+        <h3>✅ メリット（実装しない場合）</h3>
+        <div id="prosList"></div>
+      </div>
+      <div class="pc-con">
+        <h3>⚠️ デメリット（実装しない場合）</h3>
+        <div id="consList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">🗓 フェーズ別開発ロードマップ</div>
+    <div style="overflow-x:auto" id="phaseTable"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">🏆 主要競合との機能比較</div>
+    <div style="overflow-x:auto" id="compTable"></div>
+    <p style="font-size:.73rem;color:#475569;margin-top:10px">※ 公開情報に基づく概算。実際の条件は各社公表情報を確認してください。</p>
+  </div>
+
+</div><!-- /pane0 -->
+
+<!-- ══════════════════ TAB 1: ROI MODEL ══════════════════ -->
+<div class="pane" id="pane1">
+  <div class="ml">
+
+    <!-- LEFT: Parameters -->
+    <div class="sticky-panel">
+      <div class="card">
+        <div class="card-ttl">⚙️ パラメータ設定</div>
+
+        <div class="sec-lbl">👥 市場・ユーザー</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">初期アクティブ口座数</span><span class="sl-val"><span id="v-users">10,000</span>人</span></div>
+          <input type="range" id="s-users" min="1000" max="100000" step="1000" value="10000" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">年間成長率（機能フル実装時）</span><span class="sl-val"><span id="v-growth">30</span>%</span></div>
+          <input type="range" id="s-growth" min="5" max="120" step="5" value="30" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">機能なし期間の成長ペナルティ</span><span class="sl-val"><span id="v-penalty">75</span>%</span></div>
+          <input type="range" id="s-penalty" min="30" max="100" step="5" value="75" oninput="update()">
+          <div style="font-size:.68rem;color:#475569;margin-top:2px">100%=ペナルティなし、50%=成長が半分に</div>
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">年間ベース解約率</span><span class="sl-val"><span id="v-churn">10</span>%</span></div>
+          <input type="range" id="s-churn" min="0" max="40" step="1" value="10" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">機能なし時の追加解約率</span><span class="sl-val">+<span id="v-addchurn">3</span>%</span></div>
+          <input type="range" id="s-addchurn" min="0" max="15" step="1" value="3" oninput="update()">
+        </div>
+
+        <div class="sec-lbl">💴 収益・金利</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">平均建玉残高/人</span><span class="sl-val"><span id="v-balance">100</span>万円</span></div>
+          <input type="range" id="s-balance" min="10" max="500" step="10" value="100" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">買建比率</span><span class="sl-val"><span id="v-buyratio">70</span>%</span></div>
+          <input type="range" id="s-buyratio" min="30" max="90" step="5" value="70" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">買方金利（顧客向け）</span><span class="sl-val"><span id="v-buyrate">2.80</span>%</span></div>
+          <input type="range" id="s-buyrate" min="1.0" max="5.0" step="0.1" value="2.8" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">調達コスト（融資金利）</span><span class="sl-val"><span id="v-fundcost">1.60</span>%</span></div>
+          <input type="range" id="s-fundcost" min="0.5" max="3.5" step="0.1" value="1.6" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">貸株料（顧客向け）</span><span class="sl-val"><span id="v-lendrate">1.10</span>%</span></div>
+          <input type="range" id="s-lendrate" min="0.3" max="3.0" step="0.1" value="1.1" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">調達貸株料コスト</span><span class="sl-val"><span id="v-lendcost">0.40</span>%</span></div>
+          <input type="range" id="s-lendcost" min="0.1" max="1.5" step="0.1" value="0.4" oninput="update()">
+        </div>
+
+        <div class="sec-lbl">🏗 開発コスト</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">フェーズ1開発費</span><span class="sl-val"><span id="v-p1cost">9,500</span>万円</span></div>
+          <input type="range" id="s-p1cost" min="1000" max="30000" step="500" value="9500" oninput="update()">
+        </div>
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">機能追加（フェーズ2）開発費</span><span class="sl-val"><span id="v-p2cost">5,500</span>万円</span></div>
+          <input type="range" id="s-p2cost" min="500" max="20000" step="500" value="5500" oninput="update()">
+        </div>
+
+        <div class="sec-lbl">📅 分析設定</div>
+
+        <div class="sg">
+          <div class="sl-row"><span class="sl-name">評価期間</span><span class="sl-val"><span id="v-months">36</span>ヶ月</span></div>
+          <input type="range" id="s-months" min="12" max="60" step="6" value="36" oninput="update()">
+        </div>
+      </div><!-- /card -->
+    </div><!-- /sticky-panel -->
+
+    <!-- RIGHT: Results -->
+    <div>
+
+      <!-- Opportunity loss banner -->
+      <div class="opp-banner" id="oppBanner">
+        <div>
+          <div class="opp-ttl">⚠️ 即時実装 vs 12ヶ月遅延の機会損失</div>
+          <div class="opp-val" id="oppVal">—</div>
+        </div>
+        <div>
+          <div class="opp-ttl">ROI差</div>
+          <div class="opp-val" id="oppRoi">—</div>
+        </div>
+        <div style="font-size:.75rem;color:#9f1239;flex:1">
+          フェーズ2を12ヶ月遅らせると、評価期間内の累積粗利がこの分だけ失われます。
+          遅延が長いほど高成長シナリオでの損失は指数的に拡大します。
+        </div>
+      </div>
+
+      <!-- ROI cards -->
+      <div class="rc-grid" id="roiCards"></div>
+
+      <!-- Cumulative GP chart -->
+      <div class="card">
+        <div class="card-ttl">📈 累積粗利（貢献利益）推移</div>
+        <div class="ch-wrap"><canvas id="chartGP"></canvas></div>
+        <div style="font-size:.72rem;color:#475569">粗利 = 顧客金利収入 + 貸株料収入 − 調達コスト</div>
+      </div>
+
+      <!-- User growth chart -->
+      <div class="card">
+        <div class="card-ttl">👥 ユーザー数推移</div>
+        <div class="ch-wrap"><canvas id="chartUsers"></canvas></div>
+      </div>
+
+      <!-- Delay sensitivity -->
+      <div class="card">
+        <div class="card-ttl">🔍 フェーズ2開始タイミング × ROI 感度分析</div>
+        <div class="ch-wrap"><canvas id="chartDelay"></canvas></div>
+        <div style="font-size:.72rem;color:#475569">横軸：フェーズ2（機能追加）を開始するまでの遅延期間（月）</div>
+      </div>
+
+      <!-- Annual summary table -->
+      <div class="card">
+        <div class="card-ttl">📊 年次サマリー表</div>
+        <div style="overflow-x:auto" id="summaryTable"></div>
+      </div>
+
+    </div><!-- /right -->
+  </div><!-- /ml -->
+</div><!-- /pane1 -->
+
+<!-- ══════════════════ TAB 2: VARIABLE REFERENCE ══════════════════ -->
+<div class="pane" id="pane2">
+
+  <div class="card">
+    <div class="card-ttl">📖 モデル変数リファレンス</div>
+    <p style="font-size:.8rem;color:#64748b;margin-bottom:14px">
+      <span class="tag tag-k">主要</span> = ROIに大きく影響する変数。まずここを実際の数字に合わせてください。
+      <span class="tag tag-o" style="margin-left:8px">任意</span> = 精度を上げたい場合に設定。
+      <span class="tag tag-a" style="margin-left:8px">感度</span> = シナリオ比較に使う設計変数。
+    </p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:140px">変数名</th>
+            <th>種類</th>
+            <th style="min-width:200px">意味（シンプル解説）</th>
+            <th style="min-width:160px">推奨値・範囲</th>
+            <th>根拠・入手先</th>
+          </tr>
+        </thead>
+        <tbody id="varTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">🧮 計算式</div>
+    <div class="fml">
+      <strong>月次粗利/人（万円）</strong><br>
+      　= 建玉残高 × 買建比率 × (買方金利 − 調達金利) ÷ 12<br>
+      　+ 建玉残高 × (1 − 買建比率) × (貸株料 − 調達貸株料) ÷ 12<br>
+      　+ その他手数料 ÷ 12 ÷ 10,000<br>
+      <br>
+      <strong>月次ユーザー数（機能あり）</strong><br>
+      　= 前月ユーザー数 × (1 + 月次成長率) × (1 − 月次解約率)<br>
+      <br>
+      <strong>月次ユーザー数（機能なし）</strong><br>
+      　= 前月ユーザー数 × (1 + 月次成長率 × ペナルティ) × (1 − 月次解約率 − 追加解約率)<br>
+      <br>
+      <strong>累積粗利</strong> = Σ（月次ユーザー数 × 月次粗利/人）<br>
+      <br>
+      <strong>ROI</strong> = (累積粗利 − 総開発費) ÷ 総開発費 × 100%<br>
+      <br>
+      <strong>機会損失（遅延コスト）</strong> = 即時実装の累積粗利 − 遅延実装の累積粗利
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-ttl">📌 他の商品・機能への適用ガイド</div>
+    <table>
+      <thead><tr><th>商品・機能例</th><th>フィーチャー名</th><th>主に変えるパラメータ</th></tr></thead>
+      <tbody>
+        <tr><td>現引現渡し（本例）</td><td>現引現渡し</td><td>デフォルト値をそのまま使用</td></tr>
+        <tr><td>一般信用取引（無期限）</td><td>一般信用・無期限</td><td>成長率↑、ペナルティ0.70、買方金利3.5%</td></tr>
+        <tr><td>IPO引受機能</td><td>IPO申込み</td><td>初期ユーザー数↑、平均建玉残高を抽選単価に変更</td></tr>
+        <tr><td>先物・オプション</td><td>デリバティブ</td><td>成長率低め、ペナルティ0.60、開発費↑↑</td></tr>
+        <tr><td>外国株信用取引</td><td>外国株信用</td><td>貸株料↑、調達コスト↑、成長率↑</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /pane2 -->
+
+</div><!-- /content -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════
+
+const PROS = [
+  { lbl:"開発リードタイム短縮",  txt:"反対売買のみに絞ることで初期リリースを2〜3ヶ月前倒し可能。市場参入スピードを最大化できる。" },
+  { lbl:"システム複雑性の排除",  txt:"現物↔信用振替・株数拘束・口座区分制約（NISA等）などのバックオフィス要件が不要になり、QAコストを大幅削減。" },
+  { lbl:"オペレーションリスク低減", txt:"誤発注や例外処理パターンが減り、障害時の影響範囲を限定しやすい。監督上の「管理可能性」も向上。" },
+  { lbl:"初期開発コスト削減",    txt:"フェーズ2相当の開発費（約5,500万円）を後回しにでき、初期投資を抑えたスタートが可能。" },
+  { lbl:"グローバル基盤との親和性", txt:"米国株と同様の反対売買モデルを維持することで、グローバルアップデートの恩恵をそのまま受けられる。" },
+  { lbl:"コンプライアンス負荷軽減", txt:"受渡日管理・権利処理・特殊説明義務が減り、金融庁対応・約款設計をシンプルに保てる。" },
+];
+
+const CONS = [
+  { lbl:"株主優待ユーザーの完全喪失",  txt:"優待クロス取引（現渡決済）が使えないため、優待目的の厚い投資家層が競合に固定流出する。3月・9月は特に顕著。" },
+  { lbl:"競合との明確な機能差",        txt:"SBI・楽天・松井など主要ネット証券は現引現渡を無料で標準提供。「機能が足りない証券会社」と認識されるリスク。" },
+  { lbl:"中長期金利収入の損失",        txt:"現引ができないと投資家が長期信用建玉を維持できず、建玉残高が縮小。金利スプレッド収入が目減りする。" },
+  { lbl:"チャーン誘発（6ヶ月ルール）", txt:"制度信用の6ヶ月返済期限到来時に「必ず決済→出金」が強制発生。毎半年チャーンイベントが繰り返される。" },
+  { lbl:"資金効率の悪化",              txt:"現引→代用有価証券サイクルが使えず投資家のレバレッジ効率が低下。建玉残高拡大の阻害要因に。" },
+  { lbl:"顧客説明・苦情コスト増加",    txt:"「制度として説明される機能が使えない」ことへの問い合わせ・苦情対応コストが継続的に発生する。" },
+];
+
+const PHASES = [
+  { ph:"Phase 1",        period:"4〜6ヶ月", feat:"信用口座/審査、保証金管理、建玉管理、反対売買返済、追証・強制決済、基本UI・通知", ih:"35人月", out:"15人月", cost:"9,500万円" },
+  { ph:"Phase 2",        period:"+3〜4ヶ月", feat:"一般信用・返済期限バリエーション、権利処理・配当調整自動化、監査ログ強化", ih:"20人月", out:"10人月", cost:"5,800万円" },
+  { ph:"Phase 3（現引現渡）", period:"+2〜3ヶ月", feat:"現引/現渡注文、現物↔信用振替、資金/株数拘束、口座区分制約（NISA等）、例外処理・CS対応UI", ih:"15人月", out:"12人月", cost:"5,520万円" },
+];
+
+const COMP = [
+  { item:"現引・現渡",        sbi:"✅ 無料",  raku:"✅ 無料",  mat:"✅ 無料",  moo:"❌ 未実装" },
+  { item:"買方金利（制度信用）", sbi:"2.80%",  raku:"2.80%",  mat:"3.10%",  moo:"検討中" },
+  { item:"返済期限",          sbi:"6ヶ月/無期限", raku:"6ヶ月/無期限", mat:"6ヶ月/無期限", moo:"反対売買のみ" },
+  { item:"優待クロス対応",    sbi:"✅",       raku:"✅",       mat:"✅",       moo:"❌" },
+  { item:"代用有価証券",      sbi:"✅",       raku:"✅",       mat:"✅",       moo:"対応予定" },
+];
+
+const VARS = [
+  { nm:"初期アクティブ口座数", tp:"k", desc:"Phase 1ローンチ時点での信用取引アクティブユーザー数", rng:"5,000〜30,000人", basis:"社内口座数・信用申込率の予測から" },
+  { nm:"年間成長率", tp:"k", desc:"毎年何%ユーザーが増えるか（機能フル実装時の想定）", rng:"15%（低）/ 30%（中）/ 50%（高）", basis:"市場成長率・既存商品実績を参考に設定" },
+  { nm:"成長ペナルティ", tp:"k", desc:"機能なし期間の成長率低下率。75%=通常の75%の速度でしか成長しない", rng:"60〜90%", basis:"顧客調査・競合離脱率から推定" },
+  { nm:"年間ベース解約率", tp:"k", desc:"通常時の年間解約率（業界平均10%程度）", rng:"8〜15%", basis:"自社既存商品の解約率実績" },
+  { nm:"機能なし時の追加解約率", tp:"k", desc:"機能未実装が原因で上乗せされる解約率", rng:"1〜5%", basis:"顧客調査・競合乗り換え率から推定" },
+  { nm:"平均建玉残高/人", tp:"k", desc:"アクティブ口座1人あたりの平均信用建玉額（万円）", rng:"50〜200万円", basis:"業界平均・自社ユーザーセグメント分析" },
+  { nm:"買建比率", tp:"k", desc:"全建玉に占める買建の割合（残りは売建）", rng:"60〜75%", basis:"業界平均（買い優勢が一般的）" },
+  { nm:"買方金利（顧客向け）", tp:"k", desc:"顧客に課す買建金利（年率）= 証券会社の主要収益源", rng:"2.50〜3.10%", basis:"SBI・楽天等の公表値2.80%が業界基準" },
+  { nm:"調達コスト（融資金利）", tp:"k", desc:"証券金融会社（日証金等）から資金調達するコスト（年率）", rng:"1.40〜2.00%", basis:"日証金公表値1.60%が基準" },
+  { nm:"貸株料（顧客向け）", tp:"o", desc:"売建顧客に課す貸株料（年率）", rng:"0.80〜1.50%", basis:"各社公表値1.10%が基準" },
+  { nm:"調達貸株料コスト", tp:"o", desc:"証券金融会社への貸株料（年率）", rng:"0.30〜0.60%", basis:"日証金公表値0.40%が基準" },
+  { nm:"フェーズ1開発費", tp:"k", desc:"基本信用取引機能の開発コスト合計（万円）", rng:"5,000〜15,000万円", basis:"内製35人月＋外注15人月が目安。社内単価で調整" },
+  { nm:"フェーズ2開発費", tp:"k", desc:"追加機能（現引現渡等）の開発コスト（万円）", rng:"3,000〜10,000万円", basis:"内製15人月＋外注12人月が目安" },
+  { nm:"評価期間", tp:"o", desc:"ROI計算に使う分析期間（月）", rng:"24〜60ヶ月", basis:"投資回収期間として3〜5年が一般的" },
+  { nm:"フェーズ2開始タイミング", tp:"a", desc:"Phase 1ローンチからPhase 2リリースまでの期間（感度分析用）", rng:"0〜24ヶ月", basis:"本ツールの感度分析グラフで最適点を確認" },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// SCENARIO DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+const SCENARIOS = [
+  { label:"即時実装（0ヶ月）", delay:0,  color:"#4ade80", cls:"c0" },
+  { label:"3ヶ月後",           delay:3,  color:"#60a5fa", cls:"c1" },
+  { label:"6ヶ月後",           delay:6,  color:"#a78bfa", cls:"c2" },
+  { label:"12ヶ月後",          delay:12, color:"#f87171", cls:"c3" },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// SIMULATION ENGINE
+// ═══════════════════════════════════════════════════════════════
+function simulate(p, phase2Month) {
+  // phase2Month: 0 = immediate (from month 1), else the month number when phase2 starts
+  const startMonth = phase2Month <= 0 ? 1 : phase2Month;
+
+  // Monthly conversion
+  const mg  = Math.pow(1 + p.growth/100,               1/12) - 1;
+  const pgm = Math.pow(1 + p.growth*p.penalty/100/100, 1/12) - 1;
+  const mc  = Math.pow(1 + p.churn/100,                1/12) - 1;
+  const mac = Math.pow(1 + (p.churn + p.addChurn)/100, 1/12) - 1;
+
+  // Gross profit per user per month (万円)
+  // = balance × buyRatio × (buyRate - fundCost)/100/12
+  // + balance × (1-buyRatio) × (lendRate - lendCost)/100/12
+  // + otherFee/12/10000
+  const gpPerUser = p.balance * (p.buyRatio/100) * (p.buyRate - p.fundCost) / 100 / 12
+                  + p.balance * (1 - p.buyRatio/100) * (p.lendRate - p.lendCost) / 100 / 12
+                  + 500 / 12 / 10000;
+
+  let users  = p.users;
+  let cumGP  = 0;
+  const uArr = [];
+  const gpArr = [];
+  const cumArr = [];
+
+  for (let m = 1; m <= p.months; m++) {
+    const limited = m < startMonth;
+    users = users * (1 + (limited ? pgm : mg)) * (1 - (limited ? mac : mc));
+    const gp = users * gpPerUser;
+    cumGP += gp;
+    uArr.push(Math.round(users));
+    gpArr.push(gp);
+    cumArr.push(cumGP);
+  }
+
+  const devCost = p.p1cost + (startMonth <= p.months ? p.p2cost : 0);
+  const roi = (cumGP - devCost) / devCost;
+
+  return { uArr, gpArr, cumArr, totalGP: cumGP, roi, devCost };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════════
+let charts = {};
+
+function mkChart(id, type, data, opts) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), { type, data, options: opts });
+}
+
+const baseOpts = (yFmt, yTitle) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 200 },
+  plugins: {
+    legend: { labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 14, padding: 10 } },
+    tooltip: { backgroundColor: '#1e2130', titleColor: '#e2e8f0', bodyColor: '#94a3b8', borderColor: '#2d3148', borderWidth: 1 }
+  },
+  scales: {
+    x: { ticks: { color:'#475569', font:{size:10} }, grid: { color:'#1e2130' } },
+    y: {
+      ticks: { color:'#475569', font:{size:10}, callback: yFmt },
+      grid: { color:'#1e2130' },
+      title: yTitle ? { display:true, text:yTitle, color:'#64748b', font:{size:10} } : undefined
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PARAMS READER
+// ═══════════════════════════════════════════════════════════════
+function getP() {
+  return {
+    users:    +document.getElementById('s-users').value,
+    growth:   +document.getElementById('s-growth').value,
+    penalty:  +document.getElementById('s-penalty').value,
+    churn:    +document.getElementById('s-churn').value,
+    addChurn: +document.getElementById('s-addchurn').value,
+    balance:  +document.getElementById('s-balance').value,
+    buyRatio: +document.getElementById('s-buyratio').value,
+    buyRate:  +document.getElementById('s-buyrate').value,
+    fundCost: +document.getElementById('s-fundcost').value,
+    lendRate: +document.getElementById('s-lendrate').value,
+    lendCost: +document.getElementById('s-lendcost').value,
+    p1cost:   +document.getElementById('s-p1cost').value,
+    p2cost:   +document.getElementById('s-p2cost').value,
+    months:   +document.getElementById('s-months').value,
+  };
+}
+
+function fmt(n) { return Math.round(n).toLocaleString(); }
+function fmtM(n) { return fmt(n)+'万'; }
+
+// ═══════════════════════════════════════════════════════════════
+// UPDATE
+// ═══════════════════════════════════════════════════════════════
+function update() {
+  const p = getP();
+
+  // Update display values
+  document.getElementById('v-users').textContent    = p.users.toLocaleString();
+  document.getElementById('v-growth').textContent   = p.growth;
+  document.getElementById('v-penalty').textContent  = p.penalty;
+  document.getElementById('v-churn').textContent    = p.churn;
+  document.getElementById('v-addchurn').textContent = p.addChurn;
+  document.getElementById('v-balance').textContent  = p.balance;
+  document.getElementById('v-buyratio').textContent = p.buyRatio;
+  document.getElementById('v-buyrate').textContent  = p.buyRate.toFixed(2);
+  document.getElementById('v-fundcost').textContent = p.fundCost.toFixed(2);
+  document.getElementById('v-lendrate').textContent = p.lendRate.toFixed(2);
+  document.getElementById('v-lendcost').textContent = p.lendCost.toFixed(2);
+  document.getElementById('v-p1cost').textContent   = p.p1cost.toLocaleString();
+  document.getElementById('v-p2cost').textContent   = p.p2cost.toLocaleString();
+  document.getElementById('v-months').textContent   = p.months;
+
+  // Run all scenarios
+  const results = SCENARIOS.map(s => ({ ...s, ...simulate(p, s.delay) }));
+
+  // Opportunity loss banner
+  const best  = results[0];
+  const worst = results[results.length - 1];
+  document.getElementById('oppVal').textContent = '-' + fmtM(best.totalGP - worst.totalGP) + '円';
+  document.getElementById('oppRoi').textContent = '-' + ((best.roi - worst.roi)*100).toFixed(1) + 'pt';
+
+  // ROI cards
+  document.getElementById('roiCards').innerHTML = results.map(r => `
+    <div class="rc ${r.cls}">
+      <div class="sname">${r.label}</div>
+      <div class="rval">${(r.roi*100).toFixed(0)}%</div>
+      <div class="rlbl">ROI</div>
+      <div class="rrev">累積粗利 ${fmtM(r.totalGP)}円</div>
+      <div class="rcost">開発費 ${fmtM(r.devCost)}円</div>
+    </div>
+  `).join('');
+
+  const months = Array.from({length: p.months}, (_, i) => i+1);
+  const mLabels = months.map(m => m % 6 === 0 ? m+'M' : '');
+
+  // Cumulative GP chart
+  mkChart('chartGP', 'line', {
+    labels: mLabels,
+    datasets: results.map(r => ({
+      label: r.label,
+      data: r.cumArr,
+      borderColor: r.color,
+      backgroundColor: r.color + '18',
+      fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2
+    }))
+  }, baseOpts(v => fmtM(v)+'円', '累積粗利（万円）'));
+
+  // User chart
+  mkChart('chartUsers', 'line', {
+    labels: mLabels,
+    datasets: results.map(r => ({
+      label: r.label,
+      data: r.uArr,
+      borderColor: r.color,
+      fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2
+    }))
+  }, baseOpts(v => fmt(v)+'人', 'ユーザー数（人）'));
+
+  // Delay sensitivity chart
+  const delayRange = [];
+  for (let d = 0; d <= Math.min(p.months, 24); d++) delayRange.push(d);
+  const roiByDelay = delayRange.map(d => {
+    const r = simulate(p, d);
+    return +(r.roi * 100).toFixed(2);
+  });
+
+  mkChart('chartDelay', 'line', {
+    labels: delayRange.map(d => d + 'M'),
+    datasets: [{
+      label: 'ROI (%)',
+      data: roiByDelay,
+      borderColor: '#60a5fa',
+      backgroundColor: '#60a5fa22',
+      fill: true, tension: 0.4,
+      pointRadius: 3, pointBackgroundColor: '#60a5fa',
+      borderWidth: 2,
+    }]
+  }, {
+    ...baseOpts(v => v + '%', 'ROI (%)'),
+    plugins: { ...baseOpts().plugins, legend: { display: false } }
+  });
+
+  // Summary table
+  const years = [];
+  for (let y = 1; y*12 <= p.months; y++) years.push(y);
+
+  let tbl = `<table>
+    <thead><tr>
+      <th>年次</th>
+      ${results.map(r => `<th>${r.label}</th>`).join('')}
+      <th style="color:#f87171">機会損失（即時比）</th>
+    </tr></thead><tbody>`;
+
+  years.forEach(y => {
+    const mi = y*12 - 1;
+    tbl += `<tr>
+      <td><strong>${y}年目末</strong></td>
+      ${results.map(r => `<td>
+        累積粗利 <strong>${fmtM(r.cumArr[mi])}円</strong><br>
+        <span style="font-size:.72rem;color:#64748b">ROI ${(((r.cumArr[mi]-r.devCost)/r.devCost)*100).toFixed(0)}%</span>
+      </td>`).join('')}
+      <td style="color:#f87171;font-size:.78rem">${y===years[years.length-1] ?
+        '-' + fmtM(results[0].cumArr[mi] - results[results.length-1].cumArr[mi]) + '円' : '—'}
+      </td>
+    </tr>`;
+  });
+
+  tbl += `</tbody></table>`;
+  document.getElementById('summaryTable').innerHTML = tbl;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER STATIC CONTENT
+// ═══════════════════════════════════════════════════════════════
+function renderStatic() {
+  // Pro/Con
+  document.getElementById('prosList').innerHTML = PROS.map(p =>
+    `<div class="pci"><span class="ico">✅</span><div class="txt"><span class="lbl">${p.lbl}：</span>${p.txt}</div></div>`
+  ).join('');
+  document.getElementById('consList').innerHTML = CONS.map(c =>
+    `<div class="pci"><span class="ico">⚠️</span><div class="txt"><span class="lbl">${c.lbl}：</span>${c.txt}</div></div>`
+  ).join('');
+
+  // Phase table
+  document.getElementById('phaseTable').innerHTML = `
+    <table>
+      <thead><tr><th>フェーズ</th><th>期間目安</th><th>主要機能</th><th>内製工数</th><th>外注工数</th><th>コスト概算</th></tr></thead>
+      <tbody>${PHASES.map(ph => `
+        <tr>
+          <td><strong>${ph.ph}</strong></td>
+          <td style="white-space:nowrap">${ph.period}</td>
+          <td style="font-size:.75rem">${ph.feat}</td>
+          <td style="white-space:nowrap">${ph.ih}</td>
+          <td style="white-space:nowrap">${ph.out}</td>
+          <td><strong>${ph.cost}</strong></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  // Comp table
+  document.getElementById('compTable').innerHTML = `
+    <table>
+      <thead><tr><th>機能</th><th>SBI証券</th><th>楽天証券</th><th>松井証券</th><th style="color:#60a5fa">moomoo証券</th></tr></thead>
+      <tbody>${COMP.map(r => `
+        <tr>
+          <td><strong>${r.item}</strong></td>
+          <td>${r.sbi}</td>
+          <td>${r.raku}</td>
+          <td>${r.mat}</td>
+          <td style="color:${r.moo.includes('❌')?'#f87171':r.moo.includes('✅')?'#4ade80':'#94a3b8'}">${r.moo}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  // Variable table
+  const tpMap = { k:['主要','tag-k'], o:['任意','tag-o'], a:['感度','tag-a'] };
+  document.getElementById('varTableBody').innerHTML = VARS.map(v => {
+    const [tpLbl, tpCls] = tpMap[v.tp];
+    return `<tr>
+      <td><strong>${v.nm}</strong></td>
+      <td><span class="tag ${tpCls}">${tpLbl}</span></td>
+      <td>${v.desc}</td>
+      <td style="font-family:Consolas,monospace;font-size:.75rem">${v.rng}</td>
+      <td style="font-size:.75rem;color:#64748b">${v.basis}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════
+function switchTab(idx) {
+  document.querySelectorAll('.pane').forEach((el, i) => el.classList.toggle('on', i===idx));
+  document.querySelectorAll('.tb').forEach((el, i) => el.classList.toggle('on', i===idx));
+  if (idx === 1) setTimeout(update, 50);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PRODUCT NAME
+// ═══════════════════════════════════════════════════════════════
+function updateName() {
+  const feat = document.getElementById('featureInput').value || '機能X';
+  const comp = document.getElementById('companyInput').value || '会社名';
+  document.getElementById('featureName').textContent = feat;
+  document.getElementById('pcTitle').textContent = `${feat} を実装しない場合のメリット・デメリット（${comp}）`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+renderStatic();
+// Charts render when tab1 is opened for the first time
+
+// ═══════════════════════════════════════════════════════════════
+// PASSWORD PROTECTION
+// ═══════════════════════════════════════════════════════════════
+const PW_HASH = '6d8d7914f56ee5ee99c5b617c5dfd4c597d93c06af0e090a6a0b4f77b606b597';
+const SESSION_KEY = 'fpa_auth';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function checkPw() {
+  const val = document.getElementById('pw-input').value;
+  const hash = await sha256(val);
+  if (hash === PW_HASH) {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    document.getElementById('pw-overlay').style.display = 'none';
+    document.getElementById('app-root').style.display = 'block';
+  } else {
+    document.getElementById('pw-err').textContent = 'パスワードが違います';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+// Auto-unlock if already authenticated this session
+if (sessionStorage.getItem(SESSION_KEY) === '1') {
+  document.getElementById('pw-overlay').style.display = 'none';
+  document.getElementById('app-root').style.display = 'block';
+}
+document.getElementById('pw-input').focus();
+</script>
+</div><!-- /app-root -->
+</body>
+</html>
